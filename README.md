@@ -13,7 +13,7 @@ come from the hidden half.
 | language | repository | status |
 |---|---|---|
 | Julia | [TandemRNG.jl](https://github.com/tandem-rng/TandemRNG.jl) | reference, complete |
-| C | planned | |
+| C | [tandem-c](https://github.com/tandem-rng/tandem-c) | reference, scalar, complete |
 
 ## License
 
