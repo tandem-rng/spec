@@ -1,6 +1,6 @@
 # Tandem8x32 specification
 
-Tandem is a noncryptographic pseudorandom number generator designed for GPUs first:
+Tandem is a noncryptographic pseudorandom number generator built to be fast on CPUs and GPUs alike:
 eight 32-bit words, a hidden clock, and a Philox-shaped Feistel layer whose multipliers
 come from the hidden half.
 
