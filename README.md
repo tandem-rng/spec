@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/lockup.png" width="560" alt="tandem rng"></p>
+
 # Tandem8x32 specification
 
 Tandem is a noncryptographic pseudorandom number generator built to be fast on CPUs and GPUs alike:
