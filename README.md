@@ -20,6 +20,7 @@ come from the hidden half.
 | Python | [tandem-numpy](https://github.com/tandem-rng/tandem-numpy) | NumPy `BitGenerator` over tandem-c |
 | CUDA | [tandem-cuda](https://github.com/tandem-rng/tandem-cuda) | device header, row fill kernel |
 | JAX | [tandem-jax](https://github.com/tandem-rng/tandem-jax) | `jax.random` key implementation |
+| R | [tandem-r](https://github.com/tandem-rng/tandem-r) | package `tandemrng` over tandem-c, base R hook |
 
 ## License
 
