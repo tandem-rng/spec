@@ -21,6 +21,7 @@ come from the hidden half.
 | CUDA | [tandem-cuda](https://github.com/tandem-rng/tandem-cuda) | device header, row fill kernel |
 | JAX | [tandem-jax](https://github.com/tandem-rng/tandem-jax) | `jax.random` key implementation |
 | R | [tandem-r](https://github.com/tandem-rng/tandem-r) | package `tandemrng` over tandem-c, base R hook |
+| PyTorch | [tandem-torch](https://github.com/tandem-rng/tandem-torch) | CPU and CUDA extension |
 
 ## License
 
