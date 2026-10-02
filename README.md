@@ -19,6 +19,7 @@ come from the hidden half.
 | Rust | [tandem-rs](https://github.com/tandem-rng/tandem-rs) | complete, `rand_core` traits |
 | Python | [tandem-numpy](https://github.com/tandem-rng/tandem-numpy) | NumPy `BitGenerator` over tandem-c |
 | CUDA | [tandem-cuda](https://github.com/tandem-rng/tandem-cuda) | device header, row fill kernel |
+| JAX | [tandem-jax](https://github.com/tandem-rng/tandem-jax) | `jax.random` key implementation |
 
 ## License
 
