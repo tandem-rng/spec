@@ -18,6 +18,7 @@ come from the hidden half.
 | C, C++17 | [tandem-c](https://github.com/tandem-rng/tandem-c) | reference, complete |
 | Rust | [tandem-rs](https://github.com/tandem-rng/tandem-rs) | complete, `rand_core` traits |
 | Python | [tandem-numpy](https://github.com/tandem-rng/tandem-numpy) | NumPy `BitGenerator` over tandem-c |
+| CUDA | [tandem-cuda](https://github.com/tandem-rng/tandem-cuda) | device header, row fill kernel |
 
 ## License
 
