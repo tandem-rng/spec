@@ -15,7 +15,9 @@ come from the hidden half.
 | language | repository | status |
 |---|---|---|
 | Julia | [TandemRNG.jl](https://github.com/tandem-rng/TandemRNG.jl) | reference, complete |
-| C | [tandem-c](https://github.com/tandem-rng/tandem-c) | reference, scalar, complete |
+| C, C++17 | [tandem-c](https://github.com/tandem-rng/tandem-c) | reference, complete |
+| Rust | [tandem-rs](https://github.com/tandem-rng/tandem-rs) | complete, `rand_core` traits |
+| Python | [tandem-numpy](https://github.com/tandem-rng/tandem-numpy) | NumPy `BitGenerator` over tandem-c |
 
 ## License
 
