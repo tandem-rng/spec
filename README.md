@@ -25,6 +25,9 @@ come from the hidden half.
 | WebGPU | [tandem-webgpu](https://github.com/tandem-rng/tandem-webgpu) | WGSL shader, TypeScript package |
 | Fortran | [tandem-fortran](https://github.com/tandem-rng/tandem-fortran) | module over tandem-c, CUDA Fortran device fills |
 | Kokkos | [tandem-kokkos](https://github.com/tandem-rng/tandem-kokkos) | header over the shared device core, `fill(view, rng)` |
+| Java | [tandem-java](https://github.com/tandem-rng/tandem-java) | pure Java `RandomGenerator`, CUDA module through FFM |
+| Mojo | [tandem-mojo](https://github.com/tandem-rng/tandem-mojo) | complete, polynomial normals |
+| SYCL | [tandem-sycl](https://github.com/tandem-rng/tandem-sycl) | header over the shared device core, any SYCL device |
 
 ## License
 
