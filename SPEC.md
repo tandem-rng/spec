@@ -346,15 +346,18 @@ A scalar bounded draw rejects by drawing the next `w` bits of the stream, until 
 
 A bounded fill of `n` elements consumes exactly `n` draws, so that elements can be computed in parallel.
 Element `i` uses draw `i` of the plain `w`-bit fill.
+Let `g` be the index of that draw in the stream of the fill's key: the fill's aligned start position divided by `w`, plus `i`.
 When draw `i` is rejected, retry on the draws of a fallback generator, starting at its position 0:
 
 ```
-fallback(i) = split(i) of purpose(P_w) of the fill's generator
+fallback(g) = split(g) of purpose(P_w) of the generator with the fill's key at position 0
 P_32 = 0x424c573332
 P_64 = 0x424c573634
 ```
 
 These two purpose identifiers are reserved for this use.
+The fallback depends on the key and on `g` only.
+A bounded fill cut into ranges at any element boundary therefore equals the whole fill, and two fills of one key never share a fallback stream unless they share a draw.
 A fill without rejections equals the sequence of scalar bounded draws.
 
 ### Normals
