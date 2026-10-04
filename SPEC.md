@@ -326,3 +326,63 @@ purpose 7:                8048398f 1678e814 d8823983 c4b1045c
 **Seed whitening.** Seed 42 gives the key `421d21eb 32d31777 62e7564b df2bdf82`. From that
 key at K = 32: Float64 element 0 = 0.9829130398628935, UInt32 element 0 = 0x05e80cec, Float64
 element 2 = 0.47759300283385586, Float64 element 16 = 0.9692135305890753.
+
+## Appendix A. Derived draws (non-normative)
+
+This appendix is not part of the specification.
+It records the conventions the implementations share for draws derived from the uniform stream, so that ports agree with each other.
+A conforming implementation may omit these draws.
+An implementation that offers them should follow these rules.
+
+### Bounded integers
+
+Draw an unsigned integer uniform on `[0, range)` by Lemire's multiply-and-reject method over the uniform `w`-bit draws, `w` in {32, 64}.
+For a draw `x`, compute the `2w`-bit product `m = x · range`.
+If the low `w` bits of `m` are below `t = (2^w − range) mod range`, reject `x`.
+Return the high `w` bits of `m`.
+For `range = 0`, return 0 and consume one draw.
+
+A scalar bounded draw rejects by drawing the next `w` bits of the stream, until a draw is accepted.
+
+A bounded fill of `n` elements consumes exactly `n` draws, so that elements can be computed in parallel.
+Element `i` uses draw `i` of the plain `w`-bit fill.
+When draw `i` is rejected, retry on the draws of a fallback generator, starting at its position 0:
+
+```
+fallback(i) = split(i) of purpose(P_w) of the fill's generator
+P_32 = 0x424c573332
+P_64 = 0x424c573634
+```
+
+These two purpose identifiers are reserved for this use.
+A fill without rejections equals the sequence of scalar bounded draws.
+
+### Normals
+
+Derive standard normals by the Box-Muller transform from two consecutive uniform draws `a` and `b` of the same width:
+
+```
+r  = sqrt(−2 · log(1 − a))
+z0 = r · cos(2π b)
+z1 = r · sin(2π b)
+```
+
+A normal fill of `n` elements writes `z0` to element `2j` and `z1` to element `2j + 1`, from uniform draws `2j` and `2j + 1`.
+The fill consumes `2 · ceil(n / 2)` uniform draws.
+For odd `n`, write only `z0` of the last pair and still advance past both draws.
+A scalar normal draw returns `z0` and consumes two uniform draws, so it equals element 0 of a fill.
+A stateful wrapper may keep `z1` and return it on the next scalar call, so that repeated scalar calls equal the fill.
+A value-type generator defined by its transport form must not keep `z1`.
+
+Compute Float64 normals from Float64 uniforms in double precision.
+Compute Float32 normals from Float32 uniforms in single precision.
+Where a precise `sincospi` is available, take the angle through `sincospi(2b)`.
+Otherwise take the angle `2π b` in double precision and round `cos` and `sin` to the output type.
+
+### Agreement
+
+Uniform draws, fills, child keys and the bounded-integer draws are exact across implementations.
+Normals share the uniform draws they consume, and their values agree across implementations up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
+Cross-implementation tests use a relative tolerance of `1e-12` for Float64 and 16 units in the last place plus `1e-6` absolute for Float32.
+
+The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h` and `tests/cross_normal.h`, and the CUDA implementation in `tests/cross_fill_below.h` and `tests/cross_fill_normal.h`.
