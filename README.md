@@ -23,6 +23,8 @@ come from the hidden half.
 | R | [tandem-r](https://github.com/tandem-rng/tandem-r) | package `tandemrng` over tandem-c, base R hook |
 | PyTorch | [tandem-torch](https://github.com/tandem-rng/tandem-torch) | CPU and CUDA extension |
 | WebGPU | [tandem-webgpu](https://github.com/tandem-rng/tandem-webgpu) | WGSL shader, TypeScript package |
+| Fortran | [tandem-fortran](https://github.com/tandem-rng/tandem-fortran) | module over tandem-c, CUDA Fortran device fills |
+| Kokkos | [tandem-kokkos](https://github.com/tandem-rng/tandem-kokkos) | header over the shared device core, `fill(view, rng)` |
 
 ## License
 
