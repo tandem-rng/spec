@@ -2,6 +2,9 @@
 
 # Tandem8x32 specification
 
+[![tables](https://github.com/tandem-rng/spec/actions/workflows/tables.yml/badge.svg?branch=main)](https://github.com/tandem-rng/spec/actions/workflows/tables.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+
 Tandem is a noncryptographic pseudorandom number generator built to be fast on CPUs and GPUs alike:
 eight 32-bit words, a hidden clock, and a Philox-shaped Feistel layer whose multipliers
 come from the hidden half.
@@ -34,6 +37,4 @@ come from the hidden half.
 
 Float64 normals move from Box-Muller to the ziggurat of Appendix A: tandem-c first, then tandem-cuda, then the other ports.
 
-## License
-
-Apache License 2.0. See `LICENSE` and `NOTICE`.
+[Specification](SPEC.md) · [Apache 2.0 license](LICENSE)
