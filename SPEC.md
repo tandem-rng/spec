@@ -410,7 +410,8 @@ Normals and exponentials share the uniform draws they consume, and their values 
 Cross-implementation tests use a relative tolerance of `1e-12` plus `1e-15` absolute for Float64, and 16 units in the last place plus `1e-6` absolute for Float32.
 The absolute floor covers values near the zeros of `cos` and `sin`, where a double-precision `sin(2π b)` differs from `sincospi` by up to `8e-9` relative.
 
-The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h` and `tests/cross_normal.h`, and the CUDA implementation in `tests/cross_fill_below.h` and `tests/cross_fill_normal.h`.
+The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h`, `tests/cross_normal.h` and `tests/cross_exponential.h`, and the CUDA implementation in `tests/cross_fill_below.h`, `tests/cross_fill_normal.h` and `tests/cross_fill_exponential.h`.
+A port that copies the polynomial logarithm matches the exponential fixtures bit for bit, and the FNV-1a hash `47f8f98297d94ee2` of the exponentials in tandem-c's `tests/test_exponential_bits.c`.
 
 ## Appendix B. Parallel decomposition (non-normative)
 
