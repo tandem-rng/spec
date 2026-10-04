@@ -386,3 +386,160 @@ Normals share the uniform draws they consume, and their values agree across impl
 Cross-implementation tests use a relative tolerance of `1e-12` for Float64 and 16 units in the last place plus `1e-6` absolute for Float32.
 
 The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h` and `tests/cross_normal.h`, and the CUDA implementation in `tests/cross_fill_below.h` and `tests/cross_fill_normal.h`.
+
+## Appendix B. Parallel decomposition (non-normative)
+
+This appendix is not part of the specification.
+It shows how to split work across ranks, threads, GPU blocks and devices so that the results do not depend on how many there are.
+The code uses the C API of tandem-c, where `tandem_sub` is purpose.
+Every port offers the same operations under its own names.
+
+### One position space per key
+
+A key defines one stream of 2^64 bits, and section 4 gives random access to any position of it.
+Draw `i` of a fill that starts at the aligned position `p0` with width `w` sits at `p0 + w·i`.
+Map a global index space onto positions, and every element has one value, whoever computes it.
+The values then do not depend on the number of ranks, threads, blocks or GPUs, nor on the order in which they run.
+A constructor accepts positions below 2^63 (section 5), which leaves room for 2^57 doubles under one key.
+
+Use positions and three derived generators:
+
+| tool | gives | use for |
+| --- | --- | --- |
+| position `p0 + w·i` | element `i` of one global fill | a global array or index space |
+| `split(i)` | an independent stream for index `i`, from the key alone | one stream per task, particle or cell |
+| `fork(n)` | a batch of `n` streams from the parent's current block | children created in sequence by one parent |
+| `purpose(u)` | an independent stream for the identifier `u` | named sub-streams, such as initial state and collisions |
+
+### Global arrays: fill at an offset
+
+Element `i` of a fill equals draw `i`, so the fill of elements `[a, b)` from position `p0 + w·a` equals that part of one fill from `p0`.
+Give each rank a range and place its generator there:
+
+```c
+uint64_t a = n * rank / size, b = n * (rank + 1) / size;
+tandem_rng r = tandem_from_key(key, p0 + 64 * a, K);
+tandem_fill_f64(&r, x + a, b - a);          /* x[a..b) of one global fill */
+```
+
+The ranges need no alignment beyond the element width, and they may have any length.
+The same shape serves threads, GPU blocks and single GPU threads.
+To move a generator, set its position, which costs the same at any distance.
+
+When each work item consumes a fixed number of draws, give item `i` the stride of those draws:
+
+```c
+tandem_rng r = tandem_from_key(key, p0 + 3 * 64 * i, K);   /* three doubles per item */
+double u = tandem_next_f64(&r), v = tandem_next_f64(&r), s = tandem_next_f64(&r);
+```
+
+When the number of draws varies, as in a rejection loop, use `split(i)` instead.
+
+### Independent streams: split by work item
+
+`split(i)` derives a child key from the parent key and `i` alone.
+It does not depend on the parent's position or on the order of calls, so any rank can derive any child at any time.
+Index the children by the work item, a task, particle or cell, and not by the rank:
+
+```c
+for (uint64_t t = first_task; t < end_task; t++) {
+    tandem_rng r = tandem_split(&root, t);
+    simulate(t, &r);                        /* the same draws on 1 or 1000 ranks */
+}
+```
+
+A child indexed by the rank number makes the results depend on the number of ranks.
+Use it only when the decomposition is fixed by the problem.
+Children are generators like their parent, so `split` nests: `tandem_split(&r, step)` inside a task gives one stream per task and step.
+
+### Batches: fork
+
+`fork(n)` derives `n` children from the parent's current block and moves the parent past it.
+The children depend on the parent's position, so the parent must make the same sequence of calls everywhere it is used.
+Use `fork` where one parent creates children in sequence, such as a new generation of walkers each time step:
+
+```c
+tandem_rng kids[n];
+tandem_fork(&parent, kids, n);              /* every rank runs this on its copy of parent */
+for (uint64_t i = first; i < end; i++) step(&kids[i]);
+```
+
+Each rank keeps a copy of the parent, forks the same batch, and uses its own share.
+Where children can be indexed up front, `split` is simpler and needs no shared sequence.
+
+### Named sub-streams: purpose
+
+`purpose(u)` derives a child from the key and an identifier.
+Give each use of randomness in a program its own purpose, and draw from its children:
+
+```c
+enum { INIT = 1, COLLISIONS = 2, NOISE = 3 };
+tandem_rng init = tandem_sub(&root, INIT);
+tandem_rng coll = tandem_sub(&root, COLLISIONS);
+tandem_rng r = tandem_split(&coll, particle);
+```
+
+A purpose is stable when code changes.
+When a new phase adds draws under a new purpose, the draws of every other purpose stay the same.
+With one shared stream, an added draw shifts every later draw.
+Choose identifiers once and keep them.
+The values `0x424c573332` and `0x424c573634` are reserved for bounded fills, see Appendix A.
+
+### Bounded integers and normals
+
+A bounded fill maps element `i` to draw `i` like the plain fill, but it retries a rejected draw on a fallback generator indexed by `i` within that fill.
+A bounded fill split into ranges from different positions therefore equals one fill except at rejected elements, and ranges of one key share fallback generators.
+Give each range its own generator by `split` instead, on a fixed grid of blocks that does not depend on the number of ranks:
+
+```c
+for (uint64_t g = first_block; g < end_block; g++) {
+    tandem_rng r = tandem_split(&cells, g);
+    tandem_fill_u32_below(&r, k + g * B, B, 1000);
+}
+```
+
+A normal fill computes elements `2j` and `2j + 1` from uniform draws `2j` and `2j + 1`.
+Start every range of a global normal fill at an even element, so that the pairs fall the same way:
+
+```c
+uint64_t pairs = (n + 1) / 2;
+uint64_t a = 2 * (pairs * rank / size), b = 2 * (pairs * (rank + 1) / size);
+if (b > n) b = n;
+tandem_rng r = tandem_from_key(key, p0 + 64 * a, K);
+tandem_fill_normal_f64(&r, z + a, b - a);
+```
+
+A range of odd length writes only the cosine half of its last pair, so only the last range may be odd.
+Float32 normals use 32-bit uniforms and the offset `p0 + 32·a`.
+Normals agree across ports to the tolerance of Appendix A.
+On one platform and build they are exact, so a decomposition test can compare them bit for bit.
+
+### Checkpoint and restart
+
+The transport form of section 7, variant, key and position, is the whole state of a generator.
+Save it at a checkpoint and rebuild the generator from it at restart:
+
+```c
+uint32_t key[4]; tandem_key(&r, key);
+uint64_t pos = tandem_position(&r);
+uint32_t K = tandem_chunk_length(&r);
+/* ... restart ... */
+tandem_rng r2 = tandem_from_key(key, pos, K);   /* draws continue as if uninterrupted */
+```
+
+Children from `split` and `purpose` need no checkpoint beyond their position, since the root key and the index rebuild their keys.
+State kept per work item rather than per rank also lets a run restart on a different number of ranks.
+
+### What not to do
+
+- Do not seed each rank with `seed + rank`.
+  The results then depend on the number of ranks, and run `seed + 1` reuses the streams of run `seed` on shifted ranks.
+  Use one seed and `split` by work item.
+- Do not seed from the time or the process ID.
+  Such a run cannot be repeated, and ranks that start in the same clock tick get the same seed.
+  Draw a seed once, record it, and pass it to every rank.
+- Do not share one generator between threads behind a lock.
+  The draws then follow the thread schedule, which differs from run to run, and the lock serializes every draw.
+  Give each thread its own range or its own child.
+- Do not reach a rank's offset by drawing and discarding.
+  Set the position instead.
