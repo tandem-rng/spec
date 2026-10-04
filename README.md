@@ -9,6 +9,9 @@ come from the hidden half.
 - `SPEC.md` is the normative specification. Every implementation conforms to it.
 - `vectors.json` holds the test vectors of `SPEC.md` section 8 as machine-readable data.
   An implementation's test suite reads this file and checks every entry.
+- `tables/normal_f64_zig1024.json` holds the ziggurat tables of the Float64 normals in `SPEC.md` Appendix A.
+  `tools/gen_zig_tables.py` derives them with mpmath, and CI checks the committed file with `--check`.
+- Fixtures for normals come from tandem-c `tests/cross_normal.h`.
 
 ## Implementations
 
@@ -28,6 +31,8 @@ come from the hidden half.
 | Java | [tandem-java](https://github.com/tandem-rng/tandem-java) | pure Java `RandomGenerator`, CUDA module through FFM |
 | Mojo | [tandem-mojo](https://github.com/tandem-rng/tandem-mojo) | complete, polynomial normals |
 | SYCL | [tandem-sycl](https://github.com/tandem-rng/tandem-sycl) | header over the shared device core, any SYCL device |
+
+Float64 normals move from Box-Muller to the ziggurat of Appendix A: tandem-c first, then tandem-cuda, then the other ports.
 
 ## License
 

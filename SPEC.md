@@ -367,7 +367,123 @@ A fill without rejections equals the sequence of scalar bounded draws.
 
 ### Normals
 
-Derive standard normals by the Box-Muller transform from two consecutive uniform draws `a` and `b` of the same width:
+Float64 normals use a ziggurat with 1024 layers, one 64-bit draw per element.
+Float32 normals use the Box-Muller transform, one pair of 32-bit draws per two elements.
+
+#### Reference logarithm
+
+Let `L(x) = −2 ln x` for Float64 `x` in `(0, 1]`, computed as below.
+Each `fma` is a fused multiply-add with one rounding.
+Every other operation rounds once to the nearest Float64, and no product is fused into a sum.
+
+```
+ix = (bits of x) + 0x00095f6200000000                 (64-bit integer)
+nk = 1023 − (ix >> 52)                                (exact in Float64, equals −k for x = m · 2^k)
+m  = Float64 with bits (ix & 0x000fffffffffffff) + 0x3fe6a09e00000000
+s  = (m − 1) / (m + 1)
+z  = s · s
+p  = fma(z, fma(z, fma(z, fma(z, fma(z, fma(z, c6, c5), c4), c3), c2), c1), 1)
+L  = fma(nk, 0x1.a39ef00000000p−32, fma(nk, 0x1.62e42fee00000p+0, (s · −4) · p))
+
+c6 = 0x1.54797261814c6p−4    c5 = 0x1.7381dac46557bp−4    c4 = 0x1.c71fd2b1ef828p−4
+c3 = 0x1.2492462428654p−3    c2 = 0x1.9999999b8be41p−3    c1 = 0x1.55555555553b4p−2
+```
+
+Let `ln(x) = −0.5 · L(x)`, which is exact given `L(x)`.
+This is `neg2_log_f64` of the C reference.
+
+#### Float64: ziggurat
+
+Let `f(x) = exp(−x² / 2)`.
+The ziggurat stacks 1024 layers of equal area `v` under `f` on `x ≥ 0`.
+Define the widths `X_0 > X_1 > … > X_1024` and `v` from the base width `R` in exact arithmetic:
+
+```
+v        = R · f(R) + ∫ f(t) dt over t ≥ R
+X_0      = v / f(R)
+X_1      = R
+X_(i+1)  = sqrt(−2 · log(f(X_i) + v / X_i))     for 1 ≤ i ≤ 1022
+X_1024   = 0
+```
+
+`R` is the root of `f(X_1023) + v / X_1023 = 1`, so that the top layer ends at the mode.
+Layer `i` with `1 ≤ i ≤ 1023` is the rectangle `[0, X_i] × [f(X_i), f(X_(i+1))]`.
+Layer 0 is the rectangle `[0, R] × [0, f(R)]` and the region under `f` beyond `R`.
+Its area equals that of the rectangle `[0, X_0] × [0, f(R)]`.
+
+The tables follow from the exact widths:
+
+| table | entries | value |
+|---|---|---|
+| `W[i]` | 1024, `0 ≤ i ≤ 1023` | `X_i · 2^−53`, rounded to the nearest Float64 |
+| `K[i]` | 1024, `0 ≤ i ≤ 1023` | `floor(2^53 · X_(i+1) / X_i)`, an integer below `2^53`, with `K[1023] = 0` |
+| `Y[i]` | 1025, `0 ≤ i ≤ 1024` | `f(X_i)` rounded to the nearest Float64 for `i ≤ 1023`, and `Y[1024] = 1` |
+| `R` | 1 | `X_1` rounded to the nearest Float64, `0x1.027c84109fad5p+2` |
+
+The file `tables/normal_f64_zig1024.json` holds `R`, `W`, `K` and `Y`, with each Float64 as an exact hexadecimal float.
+Its SHA-256 is `8b961dd46a2582b953bd8780138edb0ad712e3d243a366a123ffc8978d0a33ab`.
+The script `tools/gen_zig_tables.py` derives the file from these definitions with mpmath at 50 significant digits, and `--check` verifies the committed file byte for byte.
+Implementations copy the values of this file.
+
+Split a 64-bit draw `r` into the layer, the sign and a 53-bit magnitude, and take the fast path:
+
+```
+i  = r & 1023                  (bits 0–9)
+s  = (r >> 10) & 1             (bit 10)
+ra = r >> 11                   (bits 11–63)
+x  = (−1)^s · (ra · W[i])
+if ra < K[i]: return x
+```
+
+`ra` converts to Float64 exactly, and `ra · W[i]` rounds once.
+The sign flips the sign bit, so `ra = 0` with `s = 1` gives `−0.0`.
+The fast path returns 99.57 % of the elements.
+
+A draw that misses the fast path continues on a fallback generator:
+
+```
+fallback(g) = split(g) of purpose(P_N64) of the generator with the fill's key at position 0
+P_N64       = 0x4e524d3634
+```
+
+`g` is the index of `r` in the stream of the fill's key: the fill's start position aligned to 64 bits, divided by 64, plus the element index.
+The value `0x4e524d3634` is reserved for this use.
+Let `next()` return the fallback's 64-bit draws in sequence from its position 0, as its UInt64 fill does.
+Let `u(d) = (d >> 11) · 2^−53`, the Float64 mapping of section 5.
+Each missed element starts its own fallback, so no state passes between elements.
+
+Continue from the values `i`, `s`, `ra` and `x` of the fast path:
+
+```
+loop:
+    if i == 0:                                         (tail, Marsaglia's method)
+        repeat:
+            a = −ln(1 − u(next())) / R
+            b = −ln(1 − u(next()))
+        until b + b ≥ a · a
+        return (−1)^s · (R + a)
+    y = Y[i] + u(next()) · (Y[i + 1] − Y[i])           (wedge)
+    if ln(y) < −0.5 · (x · x): return x
+    r = next()
+    i, s, ra, x = split and scale r as in the fast path
+    if ra < K[i]: return x
+```
+
+Outside `ln`, round each operation once to the nearest Float64, with no fused multiply-add.
+`1 − u` is exact.
+`−ln(1 − u)` equals the Float64 exponential of `u` in the next section.
+The wedge test compares `ln y` with `−x² / 2` instead of `y` with `exp(−x² / 2)`, so `ln` is the only transcendental function.
+
+A normal fill of `n` elements writes element `i` from draw `i` of the plain UInt64 fill and consumes `n` draws.
+Fallback draws do not move the position of the filled generator.
+An empty fill follows section 5.
+A scalar normal draw consumes one 64-bit draw and equals element 0 of a fill.
+A fill cut at any element boundary equals the whole fill.
+Float64 normals are exact across implementations that use these tables and the reference `ln`.
+
+#### Float32: Box-Muller
+
+Derive Float32 normals by the Box-Muller transform from two consecutive Float32 uniform draws `a` and `b`:
 
 ```
 r  = sqrt(−2 · log(1 − a))
@@ -382,10 +498,10 @@ A scalar normal draw returns `z0` and consumes two uniform draws, so it equals e
 A stateful wrapper may keep `z1` and return it on the next scalar call, so that repeated scalar calls equal the fill.
 A value-type generator defined by its transport form must not keep `z1`.
 
-Compute Float64 normals from Float64 uniforms in double precision.
-Compute Float32 normals from Float32 uniforms in single precision.
+Compute in single precision.
 Where a precise `sincospi` is available, take the angle through `sincospi(2b)`.
-Otherwise take the angle `2π b` in double precision and round `cos` and `sin` to the output type.
+A device may take a fast intrinsic such as CUDA's `__sincosf` within the tolerance of "Agreement".
+Otherwise take the angle `2π b` in double precision and round `cos` and `sin` to Float32.
 
 The C reference computes `log`, `cos` and `sin` with short polynomials and explicit fused multiply-add, with no libm call.
 An implementation that copies those polynomials with the same operation order and fused multiply-adds produces normals bit for bit equal to the reference, on the host and on a device.
@@ -401,14 +517,16 @@ e = −log(1 − u)
 An exponential fill of `n` elements writes element `i` from uniform draw `i` and consumes `n` draws.
 A scalar exponential draw consumes one draw and equals element 0 of a fill.
 Compute Float64 exponentials from Float64 uniforms in double precision and Float32 exponentials from Float32 uniforms in single precision.
-The C reference uses the same polynomial `log` as the normals, so exponentials that copy it are bit exact.
+The C reference computes Float64 exponentials as `0.5 · L(1 − u)` with the reference logarithm, and Float32 exponentials with its Float32 polynomial, so exponentials that copy them are bit exact.
 
 ### Agreement
 
 Uniform draws, fills, child keys and the bounded-integer draws are exact across implementations.
-Normals and exponentials share the uniform draws they consume, and their values agree across implementations up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
-Cross-implementation tests use a relative tolerance of `1e-12` plus `1e-15` absolute for Float64, and 16 units in the last place plus `1e-6` absolute for Float32.
-The absolute floor covers values near the zeros of `cos` and `sin`, where a double-precision `sin(2π b)` differs from `sincospi` by up to `8e-9` relative.
+Float64 normals and Float64 exponentials are exact across implementations that use the reference logarithm, and the normals also the tables.
+Cross-implementation tests compare them bit for bit.
+Float32 normals and Float32 exponentials share the uniform draws they consume, and their values agree up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
+Cross-implementation tests use 16 units in the last place plus `1e-6` absolute for Float32.
+The absolute floor covers values near the zeros of `cos` and `sin`, where the relative error of a single-precision angle grows.
 
 The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h`, `tests/cross_normal.h` and `tests/cross_exponential.h`, and the CUDA implementation in `tests/cross_fill_below.h`, `tests/cross_fill_normal.h` and `tests/cross_fill_exponential.h`.
 A port that copies the polynomial logarithm matches the exponential fixtures bit for bit, and the FNV-1a hash `47f8f98297d94ee2` of the exponentials in tandem-c's `tests/test_exponential_bits.c`.
@@ -509,7 +627,7 @@ A purpose is stable when code changes.
 When a new phase adds draws under a new purpose, the draws of every other purpose stay the same.
 With one shared stream, an added draw shifts every later draw.
 Choose identifiers once and keep them.
-The values `0x424c573332` and `0x424c573634` are reserved for bounded fills, see Appendix A.
+The values `0x424c573332` and `0x424c573634` are reserved for bounded fills, and `0x4e524d3634` for Float64 normals, see Appendix A.
 
 ### Bounded integers and normals
 
@@ -524,20 +642,27 @@ tandem_fill_u32_below(&r, k + a, b - a, 1000);   /* k[a..b) of one global bounde
 A scalar bounded draw consumes a varying number of draws, so a sequence of scalar draws does not decompose by position.
 Use a fill, or `split` per work item.
 
-A normal fill computes elements `2j` and `2j + 1` from uniform draws `2j` and `2j + 1`.
-Start every range of a global normal fill at an even element, so that the pairs fall the same way:
+A Float64 normal fill maps element `i` to draw `i` and keys its fallback by the draw's index, as a bounded fill does.
+It decomposes at any element boundary, and its values are exact across ports:
+
+```c
+tandem_rng r = tandem_from_key(key, p0 + 64 * a, K);
+tandem_fill_normal_f64(&r, z + a, b - a);       /* z[a..b) of one global normal fill */
+```
+
+A Float32 normal fill computes elements `2j` and `2j + 1` from uniform draws `2j` and `2j + 1`.
+Start every range of a global Float32 normal fill at an even element, so that the pairs fall the same way:
 
 ```c
 uint64_t pairs = (n + 1) / 2;
 uint64_t a = 2 * (pairs * rank / size), b = 2 * (pairs * (rank + 1) / size);
 if (b > n) b = n;
-tandem_rng r = tandem_from_key(key, p0 + 64 * a, K);
-tandem_fill_normal_f64(&r, z + a, b - a);
+tandem_rng r = tandem_from_key(key, p0 + 32 * a, K);
+tandem_fill_normal_f32(&r, z + a, b - a);
 ```
 
 A range of odd length writes only the cosine half of its last pair, so only the last range may be odd.
-Float32 normals use 32-bit uniforms and the offset `p0 + 32·a`.
-Normals agree across ports to the tolerance of Appendix A.
+Float32 normals agree across ports to the tolerance of Appendix A.
 On one platform and build they are exact, so a decomposition test can compare them bit for bit.
 
 ### Checkpoint and restart
