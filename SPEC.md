@@ -342,6 +342,11 @@ If the low `w` bits of `m` are below `t = (2^w − range) mod range`, reject `x`
 Return the high `w` bits of `m`.
 For `range = 0`, return 0 and consume one draw.
 
+An interface that names the draw width, such as a `u32` or `u64` bounded fill, uses that width.
+An interface that names only the result type or the bounds chooses the width from the range: `w = 32` when `range ≤ 2^32`, else `w = 64`.
+The result type does not affect the values, so a bounded draw into a 64-bit integer with a range below `2^32` equals the same draw into a 32-bit integer.
+A signed interval `[lo, hi)` draws on `range = hi − lo` and adds `lo`.
+
 A scalar bounded draw rejects by drawing the next `w` bits of the stream, until a draw is accepted.
 
 A bounded fill of `n` elements consumes exactly `n` draws, so that elements can be computed in parallel.
