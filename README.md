@@ -34,6 +34,10 @@ come from the hidden half.
 | Java | [tandem-java](https://github.com/tandem-rng/tandem-java) | pure Java `RandomGenerator`, CUDA module through FFM |
 | Mojo | [tandem-mojo](https://github.com/tandem-rng/tandem-mojo) | complete, polynomial normals |
 | SYCL | [tandem-sycl](https://github.com/tandem-rng/tandem-sycl) | header over the shared device core, any SYCL device |
+| Metal | [tandem-metal](https://github.com/tandem-rng/tandem-metal) | Swift package, MSL shader, Swift CPU fills |
+| MLX | [tandem-mlx](https://github.com/tandem-rng/tandem-mlx) | Python, `mx.fast.metal_kernel` over the tandem-metal shader |
+| Haskell | [tandem-hs](https://github.com/tandem-rng/tandem-hs) | pure Haskell, `random` interface |
+| OCaml | [tandem-ml](https://github.com/tandem-rng/tandem-ml) | fills over vendored tandem-c, pure OCaml fallback, Float64 only |
 
 Float64 normals move from Box-Muller to the ziggurat of Appendix A: tandem-c first, then tandem-cuda, then the other ports.
 
