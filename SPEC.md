@@ -387,11 +387,28 @@ Compute Float32 normals from Float32 uniforms in single precision.
 Where a precise `sincospi` is available, take the angle through `sincospi(2b)`.
 Otherwise take the angle `2π b` in double precision and round `cos` and `sin` to the output type.
 
+The C reference computes `log`, `cos` and `sin` with short polynomials and explicit fused multiply-add, with no libm call.
+An implementation that copies those polynomials with the same operation order and fused multiply-adds produces normals bit for bit equal to the reference, on the host and on a device.
+
+### Exponentials
+
+Derive a standard exponential from one uniform draw `u` of the output width:
+
+```
+e = −log(1 − u)
+```
+
+An exponential fill of `n` elements writes element `i` from uniform draw `i` and consumes `n` draws.
+A scalar exponential draw consumes one draw and equals element 0 of a fill.
+Compute Float64 exponentials from Float64 uniforms in double precision and Float32 exponentials from Float32 uniforms in single precision.
+The C reference uses the same polynomial `log` as the normals, so exponentials that copy it are bit exact.
+
 ### Agreement
 
 Uniform draws, fills, child keys and the bounded-integer draws are exact across implementations.
-Normals share the uniform draws they consume, and their values agree across implementations up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
-Cross-implementation tests use a relative tolerance of `1e-12` for Float64 and 16 units in the last place plus `1e-6` absolute for Float32.
+Normals and exponentials share the uniform draws they consume, and their values agree across implementations up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
+Cross-implementation tests use a relative tolerance of `1e-12` plus `1e-15` absolute for Float64, and 16 units in the last place plus `1e-6` absolute for Float32.
+The absolute floor covers values near the zeros of `cos` and `sin`, where a double-precision `sin(2π b)` differs from `sincospi` by up to `8e-9` relative.
 
 The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h` and `tests/cross_normal.h`, and the CUDA implementation in `tests/cross_fill_below.h` and `tests/cross_fill_normal.h`.
 
