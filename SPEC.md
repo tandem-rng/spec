@@ -490,16 +490,16 @@ The values `0x424c573332` and `0x424c573634` are reserved for bounded fills, see
 
 ### Bounded integers and normals
 
-A bounded fill maps element `i` to draw `i` like the plain fill, but it retries a rejected draw on a fallback generator indexed by `i` within that fill.
-A bounded fill split into ranges from different positions therefore equals one fill except at rejected elements, and ranges of one key share fallback generators.
-Give each range its own generator by `split` instead, on a fixed grid of blocks that does not depend on the number of ranks:
+A bounded fill maps element `i` to draw `i` like the plain fill, and it keys the fallback for a rejected draw by the draw's index in the stream (Appendix A).
+A bounded fill therefore decomposes like a uniform fill, at any element boundary, rejected draws included:
 
 ```c
-for (uint64_t g = first_block; g < end_block; g++) {
-    tandem_rng r = tandem_split(&cells, g);
-    tandem_fill_u32_below(&r, k + g * B, B, 1000);
-}
+tandem_rng r = tandem_from_key(key, p0 + 32 * a, K);
+tandem_fill_u32_below(&r, k + a, b - a, 1000);   /* k[a..b) of one global bounded fill */
 ```
+
+A scalar bounded draw consumes a varying number of draws, so a sequence of scalar draws does not decompose by position.
+Use a fill, or `split` per work item.
 
 A normal fill computes elements `2j` and `2j + 1` from uniform draws `2j` and `2j + 1`.
 Start every range of a global normal fill at an even element, so that the pairs fall the same way:
