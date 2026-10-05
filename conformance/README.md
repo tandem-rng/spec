@@ -23,7 +23,7 @@ To move the pin, change `PIN` in the script and the commit above, then regenerat
 | `fill_below.json` | `tests/cross_fill_below.h`, `tests/cuda_fill_below.h` | bounded fills |
 | `normal.json` | `tests/cross_normal.h`, `tests/cuda_fill_normal.h` | Float64 ziggurat and Float32 Box-Muller fills |
 | `exponential.json` | `tests/cross_exponential.h` | exponential fills |
-| `choice.json` | `tests/cross_choice.h` | weighted choice fills, Appendix C |
+| `choice.json` | `tests/cross_choice.h`, and `vectors.json` of this repository | weighted choice fills, Appendix C |
 | `hashes.json` | `tests/data`, `tools/dump_*.c`, `tests/test_*_bits.c` | SHA-256 and FNV-1a of long outputs |
 
 ## Cases
@@ -41,6 +41,7 @@ Each case has these fields:
 | `range` | the bound of a bounded draw, a hexadecimal string of `w / 4` digits |
 | `weights` | the weights of a choice, as the IEEE 754 bits of Float64 |
 | `capacity` | the column capacity `S` of the choice table, 16 hexadecimal digits |
+| `cut`, `alias` | the choice table, 16 and 8 hexadecimal digits per entry, on the cases from `vectors.json` |
 | `n` | the number of elements |
 | `values` | the expected elements as bit patterns: `w / 4` hexadecimal digits for integers, the IEEE 754 bits for floats |
 | `end` | the position after the operation, when the source pins it |

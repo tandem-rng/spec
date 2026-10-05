@@ -2,7 +2,8 @@
 
 Run without arguments to write the files from ../tandem-c. Run with --check to verify the committed
 files byte for byte. Parses the fixture headers in tests/, hashes the stream dumps in tests/data, and
-builds and runs the dump tools with $CC (default cc). Needs only the standard library.
+builds and runs the dump tools with $CC (default cc). Adds the weighted choice vectors of vectors.json.
+Needs only the standard library.
 """
 
 import argparse
@@ -131,7 +132,7 @@ def records(arrays, name):
 
 def case(src, kind, key, start, n, values, **extra):
     c = {"id": src, "kind": kind, "key": key, "K": 32, "start": start}
-    for field in ("range", "weights", "capacity"):
+    for field in ("range", "weights", "capacity", "cut", "alias"):
         if field in extra:
             c[field] = extra.pop(field)
     c["n"] = n
@@ -198,6 +199,17 @@ def choices(arrays, key):
         out.append(case(f"cross_choice.h CROSS_CHOICE[{i}]", "fill_choice", key, c_int(r["start"]), len(r["want"]),
                         [hexw(c_int(v), 32) for v in r["want"]], weights=w, capacity=hexw(c_int(r["capacity"]), 64),
                         end=c_int(r["end_pos"])))
+    return out
+
+
+def spec_choices():
+    """The Appendix C vectors of vectors.json, which also pin the cut and alias tables."""
+    vectors = json.loads((ROOT / "vectors.json").read_text())
+    out = []
+    for v in vectors["choice"]["cases"]:
+        out.append(case(f"vectors.json choice {v['name']}", "fill_choice", vectors["key"], 0, len(v["indices"]),
+                        [hexw(i, 32) for i in v["indices"]], weights=[struct.pack(">d", w).hex() for w in v["weights"]],
+                        capacity=v["S"], cut=v["cut"], alias=[hexw(a, 32) for a in v["alias"]]))
     return out
 
 
@@ -325,8 +337,9 @@ def generate(tc):
         "exponential.json": render({"source": src("cross_exponential.h", "test_api.c")},
                                    {"cases": exponentials(arrays, key)
                                     + [empty("fill_exponential_f64"), empty("fill_exponential_f32")]}),
-        "choice.json": render({"source": src("cross_choice.h", "test_api.c")},
-                              {"cases": choices(arrays["cross_choice.h"], key) + [empty("fill_choice")]}),
+        "choice.json": render({"source": src("cross_choice.h", "test_api.c") + ["tandem-spec vectors.json choice"]},
+                              {"cases": spec_choices() + choices(arrays["cross_choice.h"], key)
+                               + [empty("fill_choice")]}),
         "hashes.json": render({"source": [f"tandem-c {PIN} tests/data, tools/dump_*.c, tests/test_*_bits.c"]},
                               {"streams": streams, "dumps": dumped}),
     }

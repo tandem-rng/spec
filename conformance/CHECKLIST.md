@@ -42,6 +42,18 @@ Element `2j` is the cos half and element `2j + 1` the sin half of uniform draws 
 - Check that a scalar Float32 normal returns the cos half and consumes two draws.
 - Check that element `i` of `CROSS_NORMAL32[2]` equals element `i + 2` of `CROSS_NORMAL32[0]`: a start one pair later shifts the output by one pair.
 
+## Weighted choice
+
+Element `i` of a choice fill maps UInt64 draw `i` through the alias table, with no retry.
+Each element consumes exactly 64 bits.
+
+- Build the table of each `vectors.json` case in `choice.json` and compare `capacity`, `cut` and `alias`.
+- Check every case of `choice.json`, values and end position.
+- Check that element `i` of `CROSS_CHOICE[1]` (start 1) equals element `i + 1` of `CROSS_CHOICE[0]` (start 0).
+- Check that a scalar choice equals element 0 of a fill and consumes 64 bits, and that `m = 1` returns 0.
+- Check that an empty choice fill aligns the position to 64, the `n = 0` case of `choice.json`.
+- Check that a negative, infinite or NaN weight builds no table, and that weights that are all zero build none.
+
 ## Cut fill
 
 A fill cut at any element boundary equals the whole fill and ends at the same position.
