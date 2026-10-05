@@ -527,6 +527,7 @@ Cross-implementation tests compare them bit for bit.
 Float32 normals and Float32 exponentials share the uniform draws they consume, and their values agree up to the differences of the platform's `log`, `sqrt`, `cos` and `sin`.
 Cross-implementation tests use 16 units in the last place plus `1e-6` absolute for Float32.
 The absolute floor covers values near the zeros of `cos` and `sin`, where the relative error of a single-precision angle grows.
+A device that takes a fast intrinsic for the angle, such as CUDA's `__sincosf`, uses an absolute floor of `2.1e-6` instead, the intrinsic's error bound of `2^-21.41` times the largest radius the tests reach.
 
 The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h`, `tests/cross_normal.h` and `tests/cross_exponential.h`, and the CUDA implementation in `tests/cross_fill_below.h`, `tests/cross_fill_normal.h` and `tests/cross_fill_exponential.h`.
 A port that copies the polynomial logarithm matches the exponential fixtures bit for bit, and the FNV-1a hash `47f8f98297d94ee2` of the exponentials in tandem-c's `tests/test_exponential_bits.c`.
