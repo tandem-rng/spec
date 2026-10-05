@@ -15,6 +15,7 @@ come from the hidden half.
 - `tables/normal_f64_zig1024.json` holds the ziggurat tables of the Float64 normals in `SPEC.md` Appendix A.
   `tools/gen_zig_tables.py` derives them with mpmath, and CI checks the committed file with `--check`.
 - Fixtures for normals come from tandem-c `tests/cross_normal.h`.
+- `conformance/` holds every cross-implementation fixture and hash as JSON, from tandem-c at a pinned commit, and the checklist each port demonstrates.
 
 ## Implementations
 

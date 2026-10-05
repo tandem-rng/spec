@@ -1,0 +1,21 @@
+name: conformance
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: tandem-rng/tandem-c
+          path: tandem-c
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: git -C tandem-c checkout --detach "$(python tools/gen_conformance.py --pin)"
+      - run: python tools/gen_conformance.py --tandem-c tandem-c --check
