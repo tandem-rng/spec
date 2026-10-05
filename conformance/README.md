@@ -4,7 +4,7 @@ These files hold the cross-implementation fixtures of the derived draws in `SPEC
 Every port's test suite reads them, so a fixture changes in one place.
 `CHECKLIST.md` lists the behaviours every port demonstrates.
 
-The data comes from tandem-c at commit `d7a24242cf423dd66243ac9ed218abaa10fec3e1`.
+The data comes from tandem-c at commit `1adf2aca3926c96c3f22ea03c4a5cf2bdbb65acc`.
 `tools/gen_conformance.py` derives every file from that checkout: it parses the fixture headers in `tests/`, hashes `tests/data`, and builds and runs the dump tools.
 CI runs it with `--check` against tandem-c at the pinned commit.
 
@@ -23,11 +23,12 @@ To move the pin, change `PIN` in the script and the commit above, then regenerat
 | `fill_below.json` | `tests/cross_fill_below.h`, `tests/cuda_fill_below.h` | bounded fills |
 | `normal.json` | `tests/cross_normal.h`, `tests/cuda_fill_normal.h` | Float64 ziggurat and Float32 Box-Muller fills |
 | `exponential.json` | `tests/cross_exponential.h` | exponential fills |
+| `choice.json` | `tests/cross_choice.h` | weighted choice fills, Appendix C |
 | `hashes.json` | `tests/data`, `tools/dump_*.c`, `tests/test_*_bits.c` | SHA-256 and FNV-1a of long outputs |
 
 ## Cases
 
-`below.json`, `fill_below.json`, `normal.json` and `exponential.json` hold a list `cases`.
+`below.json`, `fill_below.json`, `normal.json`, `exponential.json` and `choice.json` hold a list `cases`.
 Each case has these fields:
 
 | field | meaning |
@@ -38,6 +39,8 @@ Each case has these fields:
 | `K` | the chunk length |
 | `start` | the bit position of the generator before the operation |
 | `range` | the bound of a bounded draw, a hexadecimal string of `w / 4` digits |
+| `weights` | the weights of a choice, as the IEEE 754 bits of Float64 |
+| `capacity` | the column capacity `S` of the choice table, 16 hexadecimal digits |
 | `n` | the number of elements |
 | `values` | the expected elements as bit patterns: `w / 4` hexadecimal digits for integers, the IEEE 754 bits for floats |
 | `end` | the position after the operation, when the source pins it |
@@ -53,6 +56,7 @@ The key `421d21eb 32d31777 62e7564b df2bdf82` is the key of integer seed 42, `SP
 | `fill_below_u32`, `fill_below_u64` | one bounded fill of `n` elements, width 32 or 64 |
 | `fill_normal_f64`, `fill_normal_f32` | one normal fill of `n` elements |
 | `fill_exponential_f64`, `fill_exponential_f32` | one exponential fill of `n` elements |
+| `fill_choice` | one weighted choice fill of `n` elements, values are UInt32 indices |
 
 A case with `n = 0` has empty `values` and checks only `end`.
 A scalar draw of a fill kind equals element 0 of the fill, so the fill cases also check the scalar draws.

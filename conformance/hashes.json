@@ -1,5 +1,5 @@
 {
-  "source": ["tandem-c d7a24242cf423dd66243ac9ed218abaa10fec3e1 tests/data, tools/dump_*.c, tests/test_*_bits.c"],
+  "source": ["tandem-c 1adf2aca3926c96c3f22ea03c4a5cf2bdbb65acc tests/data, tools/dump_*.c, tests/test_*_bits.c"],
   "streams": [
     {"file": "tests/data/k1234_K32_u32.bin", "key": ["00000001", "00000002", "00000003", "00000004"], "K": 32, "start": 0, "type": "UInt32", "n": 65536, "bytes": 262144, "sha256": "7151604c41d53021ba562d55dfaf9433ee8453bb66dc4f23f7e1c249a007d37e"},
     {"file": "tests/data/k1234_K32_u64.bin", "key": ["00000001", "00000002", "00000003", "00000004"], "K": 32, "start": 0, "type": "UInt64", "n": 2048, "bytes": 16384, "sha256": "c54744f6bda13e1bbe66e2fe61a15b1c514c402435df8b9ceee6e31d45e0766f"},

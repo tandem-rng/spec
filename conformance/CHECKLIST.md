@@ -21,9 +21,9 @@ An interface that names only the result type draws with `w = 32` when `range ≤
 
 ## n = 0
 
-- An empty uniform fill and an empty Float64 normal fill move the position to `align(start, w)` and write nothing.
+- An empty uniform fill, Float64 normal fill or weighted choice fill moves the position to `align(start, w)` and writes nothing.
 - An empty bounded, Float32 normal or exponential fill leaves the position unchanged, as Appendix A states.
-- Check the six cases with `n = 0` in `fill_below.json`, `normal.json` and `exponential.json`, which start at 33.
+- Check the seven cases with `n = 0` in `fill_below.json`, `normal.json`, `exponential.json` and `choice.json`, which start at 33.
 
 ## Odd n
 
@@ -46,7 +46,7 @@ Element `2j` is the cos half and element `2j + 1` the sin half of uniform draws 
 
 A fill cut at any element boundary equals the whole fill and ends at the same position.
 
-- Cut every case of `fill_below.json`, `normal.json` and `exponential.json` at elements 1, 7, 20, 21 and `n − 1`. Fill the pieces in order on one generator.
+- Cut every case of `fill_below.json`, `normal.json`, `exponential.json` and `choice.json` at elements 1, 7, 20, 21 and `n − 1`. Fill the pieces in order on one generator.
 - Element 20 of `CROSS_NORMAL[3]` to `CROSS_NORMAL[5]` is a miss, so the cuts at 20 and 21 fall at and after a fallback.
 - Check that `n` scalar draws equal each Float64 normal and each exponential fill case, with the same end.
 

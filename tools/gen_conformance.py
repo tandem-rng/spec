@@ -17,7 +17,7 @@ import tempfile
 from fractions import Fraction
 from pathlib import Path
 
-PIN = "d7a24242cf423dd66243ac9ed218abaa10fec3e1"
+PIN = "1adf2aca3926c96c3f22ea03c4a5cf2bdbb65acc"
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "conformance"
 F32_TOL = {"ulps": 16, "abs": 1e-6}
@@ -42,7 +42,8 @@ STREAMS = [
 EMPTY_START = 33
 # The order in which PROBE prints the end positions of its empty fills.
 EMPTY_KINDS = ["fill_below_u32", "fill_below_u64", "fill_normal_f64", "fill_normal_f32",
-               "fill_exponential_f64", "fill_exponential_f32"]
+               "fill_exponential_f64", "fill_exponential_f32", "fill_choice"]
+EMPTY_WEIGHTS = [1.0, 2.0, 3.0, 4.0]
 
 PROBE = r"""
 #include <stdio.h>
@@ -53,22 +54,27 @@ static void show(tandem_rng g) {
     printf("%08x %08x %08x %08x %u\n", k[0], k[1], k[2], k[3], tandem_chunk_length(&g));
 }
 int main(void) {
-    tandem_rng g = tandem_seed(42, 0, 0), h[6];
+    tandem_rng g = tandem_seed(42, 0, 0), h[7];
     uint32_t u32;
-    uint64_t u64;
-    double d;
+    uint32_t alias[4];
+    uint64_t u64, cut[4];
+    double d, w[4] = {1, 2, 3, 4};
     float f;
+    tandem_choice_table t;
     show(g);
     show(tandem_seed(2026, 7, 0));
     tandem_set_position(&g, START);
-    for (int i = 0; i < 6; i++) h[i] = g;
+    for (int i = 0; i < 7; i++) h[i] = g;
     tandem_fill_u32_below(&h[0], &u32, 0, 10);
     tandem_fill_u64_below(&h[1], &u64, 0, 10);
     tandem_fill_normal_f64(&h[2], &d, 0);
     tandem_fill_normal_f32(&h[3], &f, 0);
     tandem_fill_exponential_f64(&h[4], &d, 0);
     tandem_fill_exponential_f32(&h[5], &f, 0);
-    for (int i = 0; i < 6; i++) printf("%llu ", (unsigned long long)tandem_position(&h[i]));
+    if (!tandem_choice_build(&t, w, 4, cut, alias)) return 1;
+    tandem_fill_choice(&h[6], &u32, 0, &t);
+    for (int i = 0; i < 7; i++) printf("%llu ", (unsigned long long)tandem_position(&h[i]));
+    printf("\n%016llx", (unsigned long long)t.capacity);
     return 0;
 }
 """
@@ -78,7 +84,7 @@ def c_arrays(text):
     """Map each array name to (field list, nested initializer) for the fixture headers."""
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     text = re.sub(r"//[^\n]*", "", text)
-    fields = lambda body: re.findall(r"(\w+)\s+(\w+)(?:\[[^\]]*\])?;", body)
+    fields = lambda body: re.findall(r"(\w+)(?:\s+|\s*\*+\s*)(\w+)(?:\[[^\]]*\])?;", body)
     typedefs = {m[2]: fields(m[1]) for m in re.finditer(r"typedef struct \{(.*?)\}\s*(\w+);", text, re.S)}
     found = {}
     decl = r"static const (?:struct \{(?P<body>.*?)\}|(?P<type>\w+))\s+(?P<name>\w+)\[[^\]]*\]\s*=\s*\{"
@@ -125,8 +131,9 @@ def records(arrays, name):
 
 def case(src, kind, key, start, n, values, **extra):
     c = {"id": src, "kind": kind, "key": key, "K": 32, "start": start}
-    if "range" in extra:
-        c["range"] = extra.pop("range")
+    for field in ("range", "weights", "capacity"):
+        if field in extra:
+            c[field] = extra.pop(field)
     c["n"] = n
     c["values"] = values
     c.update(extra)
@@ -182,6 +189,18 @@ def normals(arrays, key, text):
     return out
 
 
+def choices(arrays, key):
+    weights = {name: [f64_hex(v) for v in row] for name, (_, row) in arrays.items() if name.startswith("CROSS_CHOICE_W")}
+    out = []
+    for i, r in enumerate(records(arrays, "CROSS_CHOICE")):
+        w = weights[r["weights"]]
+        assert len(w) == c_int(r["m"])
+        out.append(case(f"cross_choice.h CROSS_CHOICE[{i}]", "fill_choice", key, c_int(r["start"]), len(r["want"]),
+                        [hexw(c_int(v), 32) for v in r["want"]], weights=w, capacity=hexw(c_int(r["capacity"]), 64),
+                        end=c_int(r["end_pos"])))
+    return out
+
+
 def exponentials(arrays, key):
     out = []
     for name, kind, conv, tol in (("CROSS_EXPONENTIAL", "fill_exponential_f64", f64_hex, None),
@@ -214,6 +233,7 @@ def run_tools(tc, tmp):
         assert k == "32"
         keys.append(words)
     empty_ends = dict(zip(EMPTY_KINDS, map(int, lines[2].split()), strict=True))
+    empty_ends["capacity"] = lines[3]
     dumps = {}
     for name in ("dump_normals", "dump_exponentials"):
         data = subprocess.run([exes[name]], capture_output=True, check=True).stdout
@@ -277,7 +297,7 @@ def generate(tc):
         sys.exit("tandem-c has uncommitted changes, so its build would differ from the pin")
     arrays, texts = {}, {}
     for h in ("cross_below.h", "cross_fill_below.h", "cross_normal.h", "cross_exponential.h",
-              "cuda_fill_below.h", "cuda_fill_normal.h"):
+              "cuda_fill_below.h", "cuda_fill_normal.h", "cross_choice.h"):
         texts[h] = (tc / "tests" / h).read_text()
         arrays[h] = c_arrays(texts[h])
     with tempfile.TemporaryDirectory() as tmp:
@@ -286,8 +306,11 @@ def generate(tc):
     below, fill = bounded(arrays, key)
 
     def empty(kind):
-        w = int(kind[-2:])
-        extra = {"range": hexw(10, w)} if "below" in kind else {}
+        extra = {}
+        if "below" in kind:
+            extra = {"range": hexw(10, int(kind[-2:]))}
+        elif kind == "fill_choice":
+            extra = {"weights": [f64_hex(w) for w in EMPTY_WEIGHTS], "capacity": empty_ends["capacity"]}
         return case("test_api.c test_empty_fills", kind, key, EMPTY_START, 0, [], end=empty_ends[kind], **extra)
 
     src = lambda *hs: [f"tandem-c {PIN} tests/{h}" for h in hs]
@@ -302,6 +325,8 @@ def generate(tc):
         "exponential.json": render({"source": src("cross_exponential.h", "test_api.c")},
                                    {"cases": exponentials(arrays, key)
                                     + [empty("fill_exponential_f64"), empty("fill_exponential_f32")]}),
+        "choice.json": render({"source": src("cross_choice.h", "test_api.c")},
+                              {"cases": choices(arrays["cross_choice.h"], key) + [empty("fill_choice")]}),
         "hashes.json": render({"source": [f"tandem-c {PIN} tests/data, tools/dump_*.c, tests/test_*_bits.c"]},
                               {"streams": streams, "dumps": dumped}),
     }
