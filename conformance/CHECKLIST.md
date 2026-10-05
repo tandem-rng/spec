@@ -22,7 +22,8 @@ An interface that names only the result type draws with `w = 32` when `range ≤
 ## n = 0
 
 - An empty uniform fill and an empty Float64 normal fill move the position to `align(start, w)` and write nothing.
-- tandem-c leaves the position unchanged for an empty bounded, Float32 normal or exponential fill. Check the same behaviour from starts 1, 5, 33, 65 and 1001.
+- An empty bounded, Float32 normal or exponential fill leaves the position unchanged, as Appendix A states.
+- Check the six cases with `n = 0` in `fill_below.json`, `normal.json` and `exponential.json`, which start at 33.
 
 ## Odd n
 

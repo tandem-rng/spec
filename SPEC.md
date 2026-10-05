@@ -364,6 +364,7 @@ These two purpose identifiers are reserved for this use.
 The fallback depends on the key and on `g` only.
 A bounded fill cut into ranges at any element boundary therefore equals the whole fill, and two fills of one key never share a fallback stream unless they share a draw.
 A fill without rejections equals the sequence of scalar bounded draws.
+An empty bounded fill leaves the position unchanged and does not align it.
 
 ### Normals
 
@@ -477,6 +478,7 @@ The wedge test compares `ln y` with `−x² / 2` instead of `y` with `exp(−x²
 A normal fill of `n` elements writes element `i` from draw `i` of the plain UInt64 fill and consumes `n` draws.
 Fallback draws do not move the position of the filled generator.
 An empty fill follows section 5.
+This differs from the empty bounded, Float32 normal and exponential fills, which leave the position unchanged, and implementations keep the difference.
 A scalar normal draw consumes one 64-bit draw and equals element 0 of a fill.
 A fill cut at any element boundary equals the whole fill.
 Float64 normals are exact across implementations that use these tables and the reference `ln`.
@@ -494,6 +496,7 @@ z1 = r · sin(2π b)
 A normal fill of `n` elements writes `z0` to element `2j` and `z1` to element `2j + 1`, from uniform draws `2j` and `2j + 1`.
 The fill consumes `2 · ceil(n / 2)` uniform draws.
 For odd `n`, write only `z0` of the last pair and still advance past both draws.
+An empty fill leaves the position unchanged.
 A scalar normal draw returns `z0` and consumes two uniform draws, so it equals element 0 of a fill.
 A stateful wrapper may keep `z1` and return it on the next scalar call, so that repeated scalar calls equal the fill.
 A value-type generator defined by its transport form must not keep `z1`.
@@ -515,6 +518,7 @@ e = −log(1 − u)
 ```
 
 An exponential fill of `n` elements writes element `i` from uniform draw `i` and consumes `n` draws.
+An empty exponential fill leaves the position unchanged.
 A scalar exponential draw consumes one draw and equals element 0 of a fill.
 Compute Float64 exponentials from Float64 uniforms in double precision and Float32 exponentials from Float32 uniforms in single precision.
 The C reference computes Float64 exponentials as `0.5 · L(1 − u)` with the reference logarithm, and Float32 exponentials with its Float32 polynomial, so exponentials that copy them are bit exact.

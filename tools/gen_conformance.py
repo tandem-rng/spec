@@ -17,7 +17,7 @@ import tempfile
 from fractions import Fraction
 from pathlib import Path
 
-PIN = "c4bc68892219b1377ab457ae60b9bd9aa2161a90"
+PIN = "d7a24242cf423dd66243ac9ed218abaa10fec3e1"
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "conformance"
 F32_TOL = {"ulps": 16, "abs": 1e-6}
@@ -39,7 +39,12 @@ STREAMS = [
     ("seed42_K32_char.bin", "seed42", 32, "Char", 4096, 4),
 ]
 
-KEY_PROBE = r"""
+EMPTY_START = 33
+# The order in which PROBE prints the end positions of its empty fills.
+EMPTY_KINDS = ["fill_below_u32", "fill_below_u64", "fill_normal_f64", "fill_normal_f32",
+               "fill_exponential_f64", "fill_exponential_f32"]
+
+PROBE = r"""
 #include <stdio.h>
 #include "tandem.h"
 static void show(tandem_rng g) {
@@ -48,8 +53,22 @@ static void show(tandem_rng g) {
     printf("%08x %08x %08x %08x %u\n", k[0], k[1], k[2], k[3], tandem_chunk_length(&g));
 }
 int main(void) {
-    show(tandem_seed(42, 0, 0));
+    tandem_rng g = tandem_seed(42, 0, 0), h[6];
+    uint32_t u32;
+    uint64_t u64;
+    double d;
+    float f;
+    show(g);
     show(tandem_seed(2026, 7, 0));
+    tandem_set_position(&g, START);
+    for (int i = 0; i < 6; i++) h[i] = g;
+    tandem_fill_u32_below(&h[0], &u32, 0, 10);
+    tandem_fill_u64_below(&h[1], &u64, 0, 10);
+    tandem_fill_normal_f64(&h[2], &d, 0);
+    tandem_fill_normal_f32(&h[3], &f, 0);
+    tandem_fill_exponential_f64(&h[4], &d, 0);
+    tandem_fill_exponential_f32(&h[5], &f, 0);
+    for (int i = 0; i < 6; i++) printf("%llu ", (unsigned long long)tandem_position(&h[i]));
     return 0;
 }
 """
@@ -175,27 +194,31 @@ def exponentials(arrays, key):
 
 
 def run_tools(tc, tmp):
-    """Keys of the seeds the fixtures use, and the SHA-256 and length of each dump tool's output."""
+    """Keys of the seeds the fixtures use, the end positions of the empty fills, and the SHA-256 and
+    length of each dump tool's output."""
     cc = os.environ.get("CC", "cc").split()
     flags = ["-std=c11", "-O2", "-ffp-contract=off"]
     obj = tmp / "tandem.o"
     subprocess.run(cc + flags + ["-c", "-o", obj, tc / "tandem.c"], check=True)
-    (tmp / "keys.c").write_text(KEY_PROBE)
+    (tmp / "probe.c").write_text(PROBE)
     exes = {}
-    for name, src in (("keys", tmp / "keys.c"), ("dump_normals", tc / "tools/dump_normals.c"),
-                      ("dump_exponentials", tc / "tools/dump_exponentials.c")):
+    for name, src, extra in (("probe", tmp / "probe.c", [f"-DSTART={EMPTY_START}"]),
+                             ("dump_normals", tc / "tools/dump_normals.c", []),
+                             ("dump_exponentials", tc / "tools/dump_exponentials.c", [])):
         exes[name] = tmp / name
-        subprocess.run(cc + flags + ["-I", tc, "-o", exes[name], src, obj, "-lm"], check=True)
+        subprocess.run(cc + flags + extra + ["-I", tc, "-o", exes[name], src, obj, "-lm"], check=True)
+    lines = subprocess.run([exes["probe"]], capture_output=True, text=True, check=True).stdout.split("\n")
     keys = []
-    for line in subprocess.run([exes["keys"]], capture_output=True, text=True, check=True).stdout.split("\n")[:2]:
+    for line in lines[:2]:
         *words, k = line.split()
         assert k == "32"
         keys.append(words)
+    empty_ends = dict(zip(EMPTY_KINDS, map(int, lines[2].split()), strict=True))
     dumps = {}
     for name in ("dump_normals", "dump_exponentials"):
         data = subprocess.run([exes[name]], capture_output=True, check=True).stdout
         dumps[name] = (len(data), hashlib.sha256(data).hexdigest())
-    return keys, dumps
+    return keys, empty_ends, dumps
 
 
 def hashes(tc, keys, dumps):
@@ -246,26 +269,39 @@ def render(meta, lists):
 
 
 def generate(tc):
-    head = subprocess.run(["git", "-C", tc, "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
-    if head.stdout.strip() != PIN:
-        sys.exit(f"tandem-c is at {head.stdout.strip()}, the pin is {PIN}")
+    git = lambda *a: subprocess.run(["git", "-C", tc, *a], capture_output=True, text=True, check=True).stdout
+    head = git("rev-parse", "HEAD").strip()
+    if head != PIN:
+        sys.exit(f"tandem-c is at {head}, the pin is {PIN}")
+    if git("status", "--porcelain", "--untracked-files=no"):
+        sys.exit("tandem-c has uncommitted changes, so its build would differ from the pin")
     arrays, texts = {}, {}
     for h in ("cross_below.h", "cross_fill_below.h", "cross_normal.h", "cross_exponential.h",
               "cuda_fill_below.h", "cuda_fill_normal.h"):
         texts[h] = (tc / "tests" / h).read_text()
         arrays[h] = c_arrays(texts[h])
     with tempfile.TemporaryDirectory() as tmp:
-        keys, dumps = run_tools(tc, Path(tmp))
+        keys, empty_ends, dumps = run_tools(tc, Path(tmp))
     key = keys[0]
     below, fill = bounded(arrays, key)
+
+    def empty(kind):
+        w = int(kind[-2:])
+        extra = {"range": hexw(10, w)} if "below" in kind else {}
+        return case("test_api.c test_empty_fills", kind, key, EMPTY_START, 0, [], end=empty_ends[kind], **extra)
+
     src = lambda *hs: [f"tandem-c {PIN} tests/{h}" for h in hs]
     streams, dumped = hashes(tc, keys, dumps)
     return {
         "below.json": render({"source": src("cross_below.h")}, {"cases": below}),
-        "fill_below.json": render({"source": src("cross_fill_below.h", "cuda_fill_below.h")}, {"cases": fill}),
-        "normal.json": render({"source": src("cross_normal.h", "cuda_fill_normal.h")},
-                              {"cases": normals(arrays, key, texts["cross_normal.h"])}),
-        "exponential.json": render({"source": src("cross_exponential.h")}, {"cases": exponentials(arrays, key)}),
+        "fill_below.json": render({"source": src("cross_fill_below.h", "cuda_fill_below.h", "test_api.c")},
+                                  {"cases": fill + [empty("fill_below_u32"), empty("fill_below_u64")]}),
+        "normal.json": render({"source": src("cross_normal.h", "cuda_fill_normal.h", "test_api.c")},
+                              {"cases": normals(arrays, key, texts["cross_normal.h"])
+                               + [empty("fill_normal_f64"), empty("fill_normal_f32")]}),
+        "exponential.json": render({"source": src("cross_exponential.h", "test_api.c")},
+                                   {"cases": exponentials(arrays, key)
+                                    + [empty("fill_exponential_f64"), empty("fill_exponential_f32")]}),
         "hashes.json": render({"source": [f"tandem-c {PIN} tests/data, tools/dump_*.c, tests/test_*_bits.c"]},
                               {"streams": streams, "dumps": dumped}),
     }
