@@ -39,6 +39,6 @@ come from the hidden half.
 | Haskell | [tandem-hs](https://github.com/tandem-rng/tandem-hs) | pure Haskell, `random` interface |
 | OCaml | [tandem-ml](https://github.com/tandem-rng/tandem-ml) | fills over vendored tandem-c, pure OCaml fallback, Float64 only |
 
-Float64 normals move from Box-Muller to the ziggurat of Appendix A: tandem-c first, then tandem-cuda, then the other ports.
+Every port draws Float64 normals by the ziggurat of Appendix A, bit exact with tandem-c `tests/cross_normal.h`. Float32 normals stay Box-Muller.
 
 [Specification](SPEC.md) · [Apache 2.0 license](LICENSE)
