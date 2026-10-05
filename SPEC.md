@@ -670,6 +670,14 @@ A range of odd length writes only the cosine half of its last pair, so only the 
 Float32 normals agree across ports to the tolerance of Appendix A.
 On one platform and build they are exact, so a decomposition test can compare them bit for bit.
 
+A weighted choice fill (Appendix C) maps element `i` to draw `i` and never retries, so it decomposes at any element boundary.
+Build the table once and share it read-only:
+
+```c
+tandem_rng r = tandem_from_key(key, p0 + 64 * a, K);
+tandem_fill_choice(&r, idx + a, b - a, &table);  /* idx[a..b) of one global choice fill */
+```
+
 ### Checkpoint and restart
 
 The transport form of section 7, variant, key and position, is the whole state of a generator.
@@ -699,3 +707,141 @@ State kept per work item rather than per rank also lets a run restart on a diffe
   Give each thread its own range or its own child.
 - Do not reach a rank's offset by drawing and discarding.
   Set the position instead.
+
+## Appendix C. Weighted choice (non-normative)
+
+This appendix is not part of the specification.
+It defines a draw of an index `i` in `[0, m)` with probability proportional to a weight `w[i]`, by Walker's alias method.
+The table comes from the weights by exact integer arithmetic and consumes no draws.
+Each element consumes one 64-bit draw and uses integer operations only, so every implementation returns the same indices.
+A conforming implementation may omit this draw.
+An implementation that offers it should follow these rules.
+
+### Weights
+
+Accept `m` Float64 weights `w[0], …, w[m − 1]` with `1 ≤ m < 2^32`.
+Require every weight to be finite and not negative, and at least one weight to be positive.
+Treat `−0.0` as zero.
+Reject other input and build no table.
+An interface that takes Float32 or integer weights converts each weight to Float64 first.
+
+### Table
+
+Let `nbits(x)` be the number of bits of the unsigned integer `x`, so `nbits(1) = 1`.
+Let `ceil2(x, t)` be the smallest integer not below `x · 2^t`, in exact arithmetic.
+Compute the masses `q[i]` and the column capacity `S`:
+
+```
+e    = the integer with 2^e ≤ max(w) < 2^(e+1)
+t0   = 63 − nbits(m) − e
+A    = sum of ceil2(w[i], t0)                    (A < 2^64)
+t    = t0 + 63 − nbits(A)
+q[i] = ceil2(w[i], t)
+Q    = sum of q[i]                               (2^60 < Q < 2^63 + m)
+d    = (m − Q mod m) mod m
+add d to q[b], where b is the first index of the largest q[i]
+S    = (Q + d) / m
+```
+
+The first pass bounds the sum, and the second scales it to just below `2^63` for weights of any magnitude.
+The ceiling keeps every positive weight positive, and `d < m` makes the total a multiple of `m`.
+The sums are exact, so the result does not depend on the order of summation.
+Compute `ceil2(w, t)` from the 53-bit integer significand of `w` and its exponent by a shift with the ceiling.
+`ceil(ldexp(w, t))` gives the same value except where the product is subnormal, which `ldexp` may round to 0 for a positive `w`.
+
+Pair the columns in place, with every value an unsigned 64-bit integer:
+
+```
+cut[i] = q[i], alias[i] = i                      for every i
+l = the first index with cut[l] ≥ S
+for i = 0 to m − 1:
+    j = i
+    while j ≤ i and cut[j] < S:
+        alias[j] = l
+        cut[l] = cut[l] − (S − cut[j])
+        j = l
+        if cut[l] < S: l = the first index after l with cut[l] ≥ S
+```
+
+Column `j` gives `cut[j]` of its capacity `S` to index `j` and the rest to `alias[j]`.
+A column `l` that drops below `S` before index `i` is paired at once, and one after `i` waits for the loop.
+A full column keeps `cut[j] = S` and `alias[j] = j`.
+The table is `m`, `S`, `cut[0 … m − 1]` and `alias[0 … m − 1]`, with `0 ≤ cut[j] ≤ S < 2^64` and `alias[j] < m`.
+Index `i` has probability `q[i] / (m · S)` under the table, with the padded `q`.
+An index with a zero weight never appears as a column's own index or as an alias.
+
+### Draws
+
+Map one UInt64 draw `r` (section 5) to an index:
+
+```
+x = r · m                    (128-bit product)
+j = x >> 64                  (column)
+f = x mod 2^64
+v = (f · S) >> 64
+return j if v < cut[j], else alias[j]
+```
+
+A fill of `n` elements writes element `i` from draw `i` of the plain UInt64 fill, consumes `n` draws and returns position `p' + 64n`.
+A scalar draw consumes one draw and equals element 0 of a fill.
+A fill cut at any element boundary therefore equals the whole fill, as a uniform fill does (Appendix B).
+An empty fill follows section 5: it aligns the position to 64 bits and writes nothing.
+For `m = 1` every draw returns 0 and still consumes 64 bits.
+An interface with one-based indices adds 1 to the result.
+
+The total variation distance between the law of the draws and `w / sum(w)` is below `m · 2^−58`.
+The table contributes below `m · 2^−59`, from the ceilings and `d`, and the 64-bit draw contributes the rest.
+
+### Agreement
+
+The table and the indices are exact across implementations.
+The only Float64 operations are the comparisons of the weights and exact scalings by powers of two, so no rounding enters.
+A device needs only 64-bit integer multiplies, high and low words, to draw from a table built on the host.
+Cross-implementation tests compare `S`, `cut`, `alias` and the indices bit for bit.
+The C reference publishes fixtures in `tests/cross_choice.h`.
+
+### Test vectors
+
+Under the key `k` of section 8 at K = 32, take the UInt64 draws 0 to 15 from position 0.
+All 64-bit words are hexadecimal.
+
+**Weights `(1, 2, 3, 4)`:**
+
+```
+S     = 1400000000000000
+cut   = 0800000000000000 1000000000000000 0c00000000000000 1400000000000000
+alias = 2 3 3 3
+draws 0–15: 1 3 3 2 1 1 3 0 1 1 0 3 3 1 3 3
+```
+
+**Weights `(0.25)`:** `S = 4000000000000000`, `cut = 4000000000000000`, `alias = 0`, and every draw is 0.
+
+**Weights `(2, 0.1, 0, 1, 5e−324, 0.7, 3.8, 0.001, 0.3)`**, with `d = 8`, a zero, a subnormal, and columns paired before and after the loop index:
+
+```
+S     = 0e0bd53834cafaa8
+cut   = 0581ef293003a450 01999999999999a0 0000000000000000 077619f0fb38a9a8 0000000000000001
+        0b33333333333300 0e0bd53834cafaa8 0004189374bc6a7f 04ccccccccccccc0
+alias = 3 0 0 6 6 6 6 6 6
+draws 0–15: 6 6 6 6 0 3 6 0 6 3 3 6 6 6 6 6
+```
+
+**Weights `(5e−324, 1.5e−323, 0)`**, all subnormal or zero:
+
+```
+S     = 1555555555555556
+cut   = 1000000000000000 1555555555555556 0000000000000000
+alias = 1 1 1
+draws 0–15: 1 1 1 1 1 1 1 0 1 1 0 1 1 1 1 1
+```
+
+**Weights `(1e308, 1, 1.7976931348623157e308)`**, whose Float64 sum overflows:
+
+```
+S     = 21334d03f285bf56
+cut   = 02669a07e50b80ab 0000000000000001 21334d03f285bf56
+alias = 2 0 2
+draws 0–15: 0 2 2 0 2 0 2 2 0 0 2 2 2 0 2 2
+```
+
+`vectors.json` holds these vectors under `choice`.
