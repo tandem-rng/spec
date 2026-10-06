@@ -497,6 +497,8 @@ A normal fill of `n` elements writes `z0` to element `2j` and `z1` to element `2
 The fill consumes `2 · ceil(n / 2)` uniform draws.
 For odd `n`, write only `z0` of the last pair and still advance past both draws.
 An empty fill leaves the position unchanged.
+A fill cut at an even element equals the whole fill.
+A cut at an odd element splits a pair: the first piece drops the sin half of that pair, and the second piece starts a new pair, so the pieces differ from the whole fill.
 A scalar normal draw returns `z0` and consumes two uniform draws, so it equals element 0 of a fill.
 A stateful wrapper may keep `z1` and return it on the next scalar call, so that repeated scalar calls equal the fill.
 A value-type generator defined by its transport form must not keep `z1`.

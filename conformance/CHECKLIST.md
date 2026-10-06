@@ -57,8 +57,10 @@ Each element consumes exactly 64 bits.
 ## Cut fill
 
 A fill cut at any element boundary equals the whole fill and ends at the same position.
+Float32 normals are the exception: a cut must fall at a pair boundary, an even element, because a cut at an odd element drops the sin half of the pair it splits (Appendix A).
 
-- Cut every case of `fill_below.json`, `normal.json`, `exponential.json` and `choice.json` at elements 1, 7, 20, 21 and `n − 1`. Fill the pieces in order on one generator.
+- Cut every case of `fill_below.json`, the Float64 cases of `normal.json`, `exponential.json` and `choice.json` at elements 1, 7, 20, 21 and `n − 1`. Fill the pieces in order on one generator.
+- Cut the Float32 cases of `normal.json`, `CROSS_NORMALF` and `CROSS_NORMAL32[0]` to `CROSS_NORMAL32[4]`, at elements 2, 8, 20 and the largest even element below `n`.
 - Element 20 of `CROSS_NORMAL[3]` to `CROSS_NORMAL[5]` is a miss, so the cuts at 20 and 21 fall at and after a fallback.
 - Check that `n` scalar draws equal each Float64 normal and each exponential fill case, with the same end.
 
@@ -70,3 +72,7 @@ A fill cut at any element boundary equals the whole fill and ends at the same po
 - Check that a generator accepts start `2^63 − 1` and rejects starts `2^63` and `2^64 − 1` without changing state.
 - Check that a UInt64 draw at `2^63 − 1` aligns to `2^63` and returns position `2^63 + 64`.
 - Check that a fill whose end `align(p, w) + w · n` reaches `2^64` fails before it writes output.
+
+The items on starts `2^63` and `2^64 − 1` and on a fill that reaches `2^64` apply only where the port's API can express that start or that length.
+A port whose position type cannot hold `2^63`, or whose fill length cannot reach `2^64` bits, skips the item.
+It lists in its tests what it does instead, for example a position type that cannot be built out of range, or a length bound checked at the API.
