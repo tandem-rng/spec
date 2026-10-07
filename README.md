@@ -17,6 +17,7 @@ come from the hidden half.
 - Fixtures for normals come from tandem-c `tests/cross_normal.h`.
 - Appendix C defines weighted choice by an integer alias table, exact across ports, with vectors under `choice` in `vectors.json`.
 - `conformance/` holds every cross-implementation fixture and hash as JSON, from tandem-c at a pinned commit, and the checklist each port demonstrates.
+- `docs/statistics.md` records PractRand and BigCrush results for the derived draws of Appendices A and C.
 
 ## Implementations
 
