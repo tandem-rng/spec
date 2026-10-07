@@ -4,7 +4,7 @@ These files hold the cross-implementation fixtures of the derived draws in `SPEC
 Every port's test suite reads them, so a fixture changes in one place.
 `CHECKLIST.md` lists the behaviours every port demonstrates.
 
-The data comes from tandem-c at commit `1adf2aca3926c96c3f22ea03c4a5cf2bdbb65acc`.
+The data comes from tandem-c at commit `1c75956c39581836c1f6e190d1072c9a43be6b0d`.
 `tools/gen_conformance.py` derives every file from that checkout: it parses the fixture headers in `tests/`, hashes `tests/data`, and builds and runs the dump tools.
 CI runs it with `--check` against tandem-c at the pinned commit.
 

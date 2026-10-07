@@ -523,7 +523,7 @@ An exponential fill of `n` elements writes element `i` from uniform draw `i` and
 An empty exponential fill leaves the position unchanged.
 A scalar exponential draw consumes one draw and equals element 0 of a fill.
 Compute Float64 exponentials from Float64 uniforms in double precision and Float32 exponentials from Float32 uniforms in single precision.
-The C reference computes Float64 exponentials as `0.5 · L(1 − u)` with the reference logarithm, and Float32 exponentials with its Float32 polynomial, so exponentials that copy them are bit exact.
+The C reference computes Float64 exponentials as `0.5 · L(1 − u)` with the reference logarithm, and Float32 exponentials with a two-float logarithm that carries `(2 − 2m) / (m + 1)` as a high and a low part and adds `k ln 2` by an exact two-sum, with a maximum error of 0.571 ulp over all 2^24 inputs, so exponentials that copy them are bit exact.
 
 ### Agreement
 
@@ -536,7 +536,7 @@ The absolute floor covers values near the zeros of `cos` and `sin`, where the re
 A device that takes a fast intrinsic for the angle, such as CUDA's `__sincosf`, uses an absolute floor of `2.1e-6` instead, the intrinsic's error bound of `2^-21.41` times the largest radius the tests reach.
 
 The C reference publishes fixtures in `tests/cross_below.h`, `tests/cross_fill_below.h`, `tests/cross_normal.h` and `tests/cross_exponential.h`, and the CUDA implementation in `tests/cross_fill_below.h`, `tests/cross_fill_normal.h` and `tests/cross_fill_exponential.h`.
-A port that copies the polynomial logarithm matches the exponential fixtures bit for bit, and the FNV-1a hash `47f8f98297d94ee2` of the exponentials in tandem-c's `tests/test_exponential_bits.c`.
+A port that copies the reference logarithms matches the exponential fixtures bit for bit, and the FNV-1a hash `1c761a2d471073c2` of the exponentials in tandem-c's `tests/test_exponential_bits.c`.
 
 ## Appendix B. Parallel decomposition (non-normative)
 

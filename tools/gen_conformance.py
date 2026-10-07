@@ -18,7 +18,7 @@ import tempfile
 from fractions import Fraction
 from pathlib import Path
 
-PIN = "1adf2aca3926c96c3f22ea03c4a5cf2bdbb65acc"
+PIN = "1c75956c39581836c1f6e190d1072c9a43be6b0d"
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "conformance"
 F32_TOL = {"ulps": 16, "abs": 1e-6}
