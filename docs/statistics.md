@@ -2,8 +2,11 @@
 
 PractRand 0.96 and TestU01 BigCrush results for the derived draws of Appendices A and C, as
 tandem-c [`bfa762d`](https://github.com/tandem-rng/tandem-c/commit/bfa762d7c1a99827db20ba71bee99728612b0073)
-produces them. The uniform stream has its own evidence, linked from TandemRNG.jl. Every draw
-starts from `tandem_seed(12345, 0, 0)` at position 0.
+produces them, and the Float32 exponential also as tandem-c
+[`1c75956`](https://github.com/tandem-rng/tandem-c/commit/1c75956c39581836c1f6e190d1072c9a43be6b0d)
+produces it, with the two-float logarithm that this specification's fixtures follow. The uniform
+stream has its own evidence, linked from TandemRNG.jl. Every draw starts from
+`tandem_seed(12345, 0, 0)` at position 0.
 
 ## Method
 
@@ -40,16 +43,20 @@ words.
 |---|---|---|---|
 | Float64 normal | 2^40 | pass | 2^32 `DC6-9x1Bytes-1` unusual |
 | Float64 exponential | 2^40 | pass | 2^24 `Gap-16:A` mildly suspicious, 2^40 `DC6-9x1Bytes-1` unusual |
-| `u64_below` | 2^39, still running to 2^40 | pass so far | 2^34 `BCFN(2+0,13-2U)` unusual |
-| `u32_below` | 2^39, still running to 2^40 | pass so far | none |
+| `u64_below` | 2^40 | pass | 2^34 `BCFN(2+0,13-2U)` unusual |
+| `u32_below` | 2^40 | pass | 2^40 `BCFN(2+0,13-0U)` unusual |
 | choice | 2^40 | pass | none |
 | Float32 normal | 2^38 | **fail from 2^35** | `FPF/16:(15,14-k)` FAIL from 2^35, p = 2.6e−162 at 2^38 |
 | Float32 normal, control | 2^38 | **fail from 2^35** | the same failing test, p = 1.7e−162 at 2^38 |
 | Float32 exponential | 2^38 | **fail from 2^37** | `FPF/16` exponents 0 to 2, suspicious at 2^36, FAIL from 2^37, p = 5.3e−37 at 2^38 |
 | Float32 exponential, control | 2^38 | pass | 2^30 `mod3n(5)` unusual |
+| Float32 exponential, tandem-c `1c75956` | 2^38 | pass | 2^28 `DC6-9x1Bytes-1` unusual, 2^29 `BCFN(2+3,13-2U)` unusual |
 
-The two bounded draws are recorded at their last checkpoint, 2^39, and their runs continue to
-2^40.
+The Float32 exponential of `1c75956` passes at every one of its 19 checkpoints from 2^20 to 2^38,
+at the 16 bits of the release run, where that of `bfa762d` fails from 2^37. Between the two
+commits tandem-c changed its scalar draw cache and fill loops but not its bounded draws, and the
+first 2^32 bytes of the `u64_below` and `u32_below` streams are identical. So their results hold
+for `1c75956` too.
 
 ## BigCrush
 
@@ -119,9 +126,13 @@ of the release run. Its error against −log1p(−a) in double over 2^28 draws, 
 
 A draw off its grid point is one whose 1 − exp(−x) lies nearer a neighbouring 2^−24 grid point
 than its own uniform a. Those draws fall at x from 0.25 to 2, where u lies between 0.22 and 0.86.
-These are the u values of the failing `FPF/16` exponents 0 to 2. The tandem-c branch
-`exp-f32-accuracy` bounds the error at 0.58 ulp. These results are for `bfa762d`, before that
-change.
+These are the u values of the failing `FPF/16` exponents 0 to 2. These results are for
+`bfa762d`.
+
+tandem-c `1c75956` carries the leading term of the logarithm in two floats and adds k ln 2 by
+an exact two-sum, with the same single draw. Over all 2^24 Float32 uniforms its error is at most
+0.571 ulp, and no draw lies off its grid point. Its PractRand run passes to 2^38 at 16 bits, see
+above.
 
 ## Records
 
@@ -135,11 +146,22 @@ The evidence is outside git, on the host of the validation campaign, under
 - `probes-2p34/`: the probes that chose the bits, and the two cause probes.
 - `diagnostics/`: the error table, the tail mass and the pair test.
 
+The Float32 exponential of `1c75956` has its own case directory under
+`TandemRNG-validation-evidence/1c75956-derived/practrand/`, from a copy of the harness with
+`dump_derived` built from `1c75956`.
+
 The harnesses are copies of the PureRNGs PractRand and RNGTest harnesses at `c887861`, with the
 producer replaced by `tools/dump_derived` built with clang 19 and the validators kept. The pins
 are:
 
-- `dump_derived` SHA-256 `e9b09a0fb0a7fa89e8cac331ff9ea69155287d5404d3e8f6dcb68a35560fdecd`
+- `dump_derived` SHA-256 `e9b09a0fb0a7fa89e8cac331ff9ea69155287d5404d3e8f6dcb68a35560fdecd`, and
+  `9822107b254579c4023d3e1980cbd8404de6ac6c8d2ed009855cb3350097a132` for `1c75956`
+- tandem-c source, the vendored `tandem.c`, `tandem.h`, `tandem_normal_tables.h` and
+  `tools/dump_derived.c` of `1c75956`:
+  `c15b6c93a2297c3b602e3aa4e444ca31f4dba887b0b7a31a678fcc3c127e632d`
 - PractRand 0.96 binary `e771559e82e935df5a111a64537e7c3173467c0d32f5769eea4701ca7629481b`
 - RNGTest source `c5ba87e601730f6c996a226be3c541f2ad5564fbf7ef8a74d4ba8fe647a9e1d9`
 - TestU01_jll 1.2.3 tree `f9d515229567f365d65b18f76a8d1442c3005ab0`
+
+The `bfa762d` validator hashed an empty list of source files, so its pinned source hash, the
+SHA-256 of a newline, checked no source. The `1c75956` copy hashes the four files above.
